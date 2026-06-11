@@ -5,18 +5,17 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware để phục vụ file tĩnh (index.html, css, js) từ thư mục hiện tại
+// Middleware
+app.use(express.json());  // để đọc dữ liệu JSON từ client
 app.use(express.static(__dirname));
-
-// Cấu hình CORS đơn giản (cho phép mọi nguồn, có thể hạn chế sau)
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
     next();
 });
 
-// Lấy thông tin kết nối database từ biến môi trường (Render sẽ cung cấp)
-// Hoặc dùng giá trị mặc định cho local development
+// Cấu hình database (dùng biến môi trường trên Render)
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -28,7 +27,7 @@ const dbConfig = {
 const pool = mysql.createPool(dbConfig);
 const promisePool = pool.promise();
 
-// Kiểm tra kết nối database
+// Kiểm tra sức khỏe
 app.get('/api/health', async (req, res) => {
     try {
         await promisePool.query('SELECT 1');
@@ -38,7 +37,7 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// API lấy danh sách referrers
+// Lấy danh sách referrer
 app.get('/api/referrers', async (req, res) => {
     try {
         const [rows] = await promisePool.query(
@@ -46,18 +45,72 @@ app.get('/api/referrers', async (req, res) => {
         );
         res.json({ success: true, data: rows });
     } catch (err) {
-        console.error('Database error:', err);
+        console.error(err);
         res.status(500).json({ success: false, message: 'Lỗi truy vấn dữ liệu' });
     }
 });
 
-// Route mặc định trả về index.html
+// Thêm mới referrer
+app.post('/api/referrers', async (req, res) => {
+    try {
+        const { Name, JoinDate, Rate, Phone, Note, Zalo, RelatedPic } = req.body;
+
+        // Validation cơ bản
+        if (!Name || Name.trim() === '') {
+            return res.status(400).json({ success: false, message: 'Tên không được để trống' });
+        }
+        if (Name.length > 25) {
+            return res.status(400).json({ success: false, message: 'Tên không được vượt quá 25 ký tự' });
+        }
+        if (Note && Note.length > 125) {
+            return res.status(400).json({ success: false, message: 'Ghi chú không được vượt quá 125 ký tự' });
+        }
+        let rateValue = 0;
+        if (Rate !== undefined && Rate !== '') {
+            rateValue = parseFloat(Rate);
+            if (isNaN(rateValue)) {
+                return res.status(400).json({ success: false, message: 'Hoa hồng phải là số' });
+            }
+        }
+
+        // Chuyển đổi JoinDate từ dd/mm/yyyy sang yyyy-mm-dd
+        let formattedDate = null;
+        if (JoinDate && JoinDate.trim() !== '') {
+            const parts = JoinDate.split('/');
+            if (parts.length === 3) {
+                const [day, month, year] = parts;
+                formattedDate = `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;
+            } else {
+                return res.status(400).json({ success: false, message: 'Sai định dạng ngày (dd/mm/yyyy)' });
+            }
+        }
+
+        const sql = `INSERT INTO Referrer 
+                     (Name, JoinDate, Rate, Phone, Note, Zalo, RelatedPic) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        const values = [
+            Name.trim(),
+            formattedDate,
+            rateValue,
+            Phone?.trim() || null,
+            Note?.trim() || null,
+            Zalo?.trim() || null,
+            RelatedPic?.trim() || null
+        ];
+
+        await promisePool.query(sql, values);
+        res.json({ success: true, message: 'Thêm Referrer thành công' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Lỗi server: ' + err.message });
+    }
+});
+
+// Phục vụ file index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Khởi động server
 app.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
-    console.log(`API: http://localhost:${PORT}/api/referrers`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });
