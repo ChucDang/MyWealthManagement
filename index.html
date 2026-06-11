@@ -106,9 +106,8 @@
 </div>
 
 <script>
-    // API endpoint – thay đổi URL này cho đúng với server của bạn
-    const API_URL = 'http://localhost:3000/api/referrers';  // Dành cho Node.js (phía dưới)
-    // Nếu dùng PHP, hãy sửa thành: const API_URL = 'api_referrers.php';
+    // Tự động xác định API URL dựa trên host hiện tại
+    const API_URL = '/api/referrers';
 
     let allData = [];
 
@@ -120,7 +119,7 @@
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
 
-    // Escape HTML để tránh XSS
+    // Escape HTML
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -131,7 +130,7 @@
         });
     }
 
-    // Hiển thị dữ liệu lên bảng (có thể lọc theo từ khóa)
+    // Hiển thị bảng
     function renderTable(data) {
         const tbody = document.getElementById('tableBody');
         if (!data || data.length === 0) {
@@ -161,7 +160,7 @@
         tbody.innerHTML = html;
     }
 
-    // Lọc dữ liệu theo từ khóa (client-side)
+    // Lọc dữ liệu
     function filterData(keyword) {
         if (!keyword.trim()) {
             renderTable(allData);
@@ -174,13 +173,12 @@
         renderTable(filtered);
     }
 
-    // Gọi API lấy dữ liệu
+    // Gọi API
     async function fetchReferrers() {
         try {
             const response = await fetch(API_URL);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const result = await response.json();
-            // Giả sử API trả về { success: true, data: [...] }
             if (result.success) {
                 allData = result.data;
                 renderTable(allData);
@@ -190,11 +188,11 @@
         } catch (err) {
             console.error('Lỗi fetch:', err);
             document.getElementById('tableBody').innerHTML = 
-                `<tr><td colspan="8" class="no-data" style="color:red;">❌ Không thể tải dữ liệu. Kiểm tra API: ${err.message}</td></tr>`;
+                `<tr><td colspan="8" class="no-data" style="color:red;">❌ Không thể tải dữ liệu. Kiểm tra kết nối API.</td></tr>`;
         }
     }
 
-    // Xử lý sự kiện tìm kiếm
+    // Sự kiện
     document.getElementById('searchInput').addEventListener('input', (e) => {
         filterData(e.target.value);
     });
